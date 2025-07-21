@@ -1,0 +1,20 @@
+#!/bin/bash
+set -euo pipefail
+IFS=$'\n\t'
+
+echo "Installing Python dependencies..."
+
+apt-get update
+
+DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    bluez \
+    libbluetooth-dev \
+    pkg-config \
+    libglib2.0-dev \
+    pipx
+
+export PATH="$PATH:/root/.local/bin:/usr/local/bin"
+pipx install python-can || echo "Warning: Failed to install python-can"
+pipx install pybluez || echo "Warning: Failed to install pybluez"
+
+echo "Python dependencies installed via pipx."

