@@ -38,7 +38,15 @@ def prompt_external_ip():
 
 def discover_bluetooth_devices():
     print("[*] Searching for nearby Bluetooth devices...")
-    nearby_devices = bluetooth.discover_devices(duration=8, lookup_names=True, flush_cache=True, lookup_class=False)
+    try:
+        nearby_devices = bluetooth.discover_devices(duration=8, lookup_names=True, flush_cache=True, lookup_class=False)
+    except OSError as e:
+        if e.errno == 19:
+            print("[!] ERROR: No Bluetooth adapter found or enabled.")
+            print("    Please ensure your Bluetooth adapter is plugged in and turned on.")
+            return None
+        else:
+            raise
     if not nearby_devices:
         print("[!] No Bluetooth devices found.")
         return None
@@ -222,7 +230,8 @@ def main():
     print("=== PerfektBlue Exploit Framework ===")
     target = discover_bluetooth_devices()
     if not target:
-        print("[!] No target selected. Exiting.")
+        print("[!] No target selected. Exiting...")
+        time.sleep(3)
         return
     port = DEFAULT_RFCOMM_PORT
     attacker_ip = prompt_external_ip()
