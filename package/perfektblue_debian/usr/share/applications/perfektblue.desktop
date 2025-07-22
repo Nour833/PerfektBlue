@@ -5,4 +5,6 @@ Exec=perfektblue
 Icon=/usr/share/icons/hicolor/64x64/apps/perfektblue.png
 Terminal=true
 Type=Application
-Categories=Utility;Security;Network;
+Categories=Network;Security;
+X-Kali-Package=Exploitation Tools
+X-Parrot-Package=PenTesting
