@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=PerfektBlue Exploit
+Name=PerfektBlue
 Comment=Bluetooth & CAN Attack Suite
 Exec=perfektblue
 Icon=/usr/share/icons/hicolor/64x64/apps/perfektblue.png

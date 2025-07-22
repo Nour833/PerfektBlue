@@ -218,7 +218,7 @@ def replay_can_command(interface='can0', cmd_map=None):
 
 # === MAIN ===
 def main():
-    print("=== PerfektBlue Exploit Framework (Premium Edition) ===")
+    print("=== PerfektBlue Exploit Framework ===")
     target = discover_bluetooth_devices()
     if not target:
         print("[!] No target selected. Exiting.")
