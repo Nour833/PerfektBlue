@@ -405,6 +405,10 @@ def main():
                          <--- by nour833 --->
 
 	{Colors.ENDC}""")
+	if os.geteuid() != 0:
+		print(f"{Colors.RED}[!] This script requires root privileges to function correctly.{Colors.ENDC}")
+		print(f"{Colors.YELLOW}    Please run it with 'sudo'{Colors.ENDC}")
+		return
 	try:
 		adapter_id = select_and_configure_adapter()
 		if adapter_id is None:
