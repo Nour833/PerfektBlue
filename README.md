@@ -58,7 +58,7 @@ For Debian-based systems like Kali Linux and Parrot OS, you can install PerfektB
 
 1.  **Launch** the application from your terminal or application menu:
     ```bash
-   sudo perfektblue
+    sudo perfektblue
     ```
 2.  **Follow the on-screen prompts** to proceed through the attack workflow. The tool will guide you from fingerprinting to exploitation and beyond.
 
