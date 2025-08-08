@@ -62,10 +62,44 @@ For Debian-based systems like Kali Linux and Parrot OS, you can install PerfektB
     ```
 2.  **Follow the on-screen prompts** to proceed through the attack workflow. The tool will guide you from fingerprinting to exploitation and beyond.
 
-## Disclaimer
+## ⚠️ Disclaimer
 
-**WARNING: This tool is for security research and educational purposes only. Only use on systems you own or have explicit permission to test. The developers assume no liability for any misuse or damage caused by this software. Automotive systems are safety-critical - testing on live vehicles can be dangerous and illegal without proper authorization.**
+**WARNING: This tool is intended strictly for security research, reverse engineering, and educational purposes.**
 
-## License
+You are only permitted to use this software under the following conditions:
 
-Distributed under the MIT License. See `LICENSE` for more information.
+- ✅ On systems or hardware you personally own,  
+- ✅ Or on systems for which you have **explicit, written authorization** to test.
+
+---
+
+### 🔐 Legal and Safety Notice
+
+Automotive systems are **safety-critical**. Unauthorized testing on live vehicles, public road systems, or production ECUs may be:
+
+- 🚫 **Illegal** under local or international laws.
+- ⚠️ **Dangerous**, potentially causing physical harm or system failure.
+
+Always ensure your testing takes place in a **controlled environment** (e.g., test benches, simulators, or offline labs), and never on active vehicles without formal approval and safety protocols.
+
+---
+
+### ❗ Liability
+
+The developers of this project **assume no responsibility or liability** for:
+
+- Any misuse of this software,  
+- Damage to vehicles or systems,  
+- Injury or harm resulting from improper use,  
+- Or any legal consequences resulting from unauthorized activities.
+
+**Use this tool at your own risk.**
+
+
+## 📄 License
+
+This project is licensed under the MIT License. See the [`LICENSE`](./LICENSE) file for full details.
+
+> ⚠️ **Note:** While the MIT License permits wide usage, this tool is intended only for lawful, authorized security research and educational purposes.  
+> Use of this software for malicious, unauthorized, or safety-critical purposes is strictly discouraged and may be illegal.
+
