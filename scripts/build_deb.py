@@ -11,6 +11,8 @@ import shutil
 import stat
 import subprocess
 import tomllib
+from datetime import UTC, datetime
+from email.utils import format_datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,7 +56,7 @@ def copy_file(source: Path, destination: Path) -> None:
     shutil.copy2(source, destination)
 
 
-def gzip_copy(source: Path, destination: Path, epoch: int) -> None:
+def gzip_copy(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     with (
         source.open("rb") as input_handle,
@@ -64,10 +66,36 @@ def gzip_copy(source: Path, destination: Path, epoch: int) -> None:
             mode="wb",
             fileobj=output_handle,
             compresslevel=9,
-            mtime=epoch,
+            mtime=0,
         ) as compressed,
     ):
         shutil.copyfileobj(input_handle, compressed)
+
+
+def gzip_text(content: str, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with (
+        destination.open("wb") as output_handle,
+        gzip.GzipFile(
+            filename="",
+            mode="wb",
+            fileobj=output_handle,
+            compresslevel=9,
+            mtime=0,
+        ) as compressed,
+    ):
+        compressed.write(content.encode("utf-8"))
+
+
+def debian_changelog(app_version: str, revision: str, epoch: int) -> str:
+    released = format_datetime(datetime.fromtimestamp(epoch, UTC))
+    return (
+        f"perfektblue ({app_version}-{revision}) stable; urgency=medium\n\n"
+        "  * Release PerfektBlue 2.0 as a Bluetooth-first adaptive framework.\n"
+        "  * Add BlueZ discovery, evidence-driven profiles, reports, and simulations.\n"
+        "  * Replace checked-in package staging with reproducible release builds.\n\n"
+        f" -- Nour833 <nourelislem84@outlook.fr>  {released}\n"
+    )
 
 
 def generate_md5sums(stage: Path) -> None:
@@ -131,7 +159,7 @@ Version: {deb_version}
 Section: utils
 Priority: optional
 Architecture: all
-Maintainer: Nour833
+Maintainer: Nour833 <nourelislem84@outlook.fr>
 Depends: python3 (>= 3.11), python3-dbus-next, python3-rich, bluez
 Description: Bluetooth-first adaptive security assessment framework
  Discovers Bluetooth targets through BlueZ, matches evidence-backed profiles,
@@ -159,13 +187,11 @@ raise SystemExit(main())
     gzip_copy(
         ROOT / "docs/perfektblue.1",
         stage / "usr/share/man/man1/perfektblue.1.gz",
-        epoch,
     )
-    gzip_copy(ROOT / "README.md", stage / "usr/share/doc/perfektblue/README.gz", epoch)
-    gzip_copy(
-        ROOT / "CHANGELOG.md",
-        stage / "usr/share/doc/perfektblue/changelog.gz",
-        epoch,
+    copy_file(ROOT / "README.md", stage / "usr/share/doc/perfektblue/README.md")
+    gzip_text(
+        debian_changelog(app_version, args.revision, epoch),
+        stage / "usr/share/doc/perfektblue/changelog.Debian.gz",
     )
     copy_file(ROOT / "LICENSE", stage / "usr/share/doc/perfektblue/copyright")
     generate_md5sums(stage)
