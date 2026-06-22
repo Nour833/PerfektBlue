@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0 — 2026-06-22
+
+- Added a polished interactive main menu when `perfektblue` runs without a command.
+- Added persistent target context, safety-policy status, and session counts.
+- Added navigable target, assessment, diagnostics, reports, library, settings, and CAN views.
+- Added contextual help, shortcuts, breadcrumbs, progress states, and back navigation.
+- Preserved all noninteractive commands and stable JSON output for automation.
+
 ## 2.0.0 — 2026-06-22
 
 - Replaced the proof-of-concept script with an installable, typed Python package.

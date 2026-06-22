@@ -1,4 +1,4 @@
-.TH PERFEKTBLUE 1 "June 2026" "PerfektBlue 2.0.0" "User Commands"
+.TH PERFEKTBLUE 1 "June 2026" "PerfektBlue 2.1.0" "User Commands"
 .SH NAME
 perfektblue \- Bluetooth-first adaptive security assessment framework
 .SH SYNOPSIS
@@ -10,7 +10,14 @@ profiles, builds a compatible assessment plan, and produces evidence-backed repo
 .PP
 The default risk policy is passive. Active verification requires a target-specific module,
 compatible profile, sufficient confidence, written authorization, and explicit command options.
+.PP
+Running
+.B perfektblue
+without a command opens the interactive Bluetooth intelligence console.
 .SH COMMANDS
+.TP
+.B menu
+Open the interactive terminal workspace with target, session, and safety context.
 .TP
 .B doctor
 Check Linux, Python dependencies, BlueZ access, and Bluetooth adapters.
@@ -55,4 +62,3 @@ inconclusive, or no-known-path result does not prove immunity to unknown vulnera
 .SH SEE ALSO
 .BR bluetoothctl (1),
 .BR btmon (1)
-

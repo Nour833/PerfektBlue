@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import asdict, is_dataclass
 from typing import Any, cast
 
@@ -33,6 +34,38 @@ class Output:
             self.console.print(message, style=style)
         else:
             print(message)
+
+    def render(self, renderable: Any) -> None:
+        if self.console is not None:
+            self.console.print(renderable)
+        else:
+            print(str(renderable))
+
+    def clear(self) -> None:
+        if self.console is not None and sys.stdout.isatty():
+            self.console.clear()
+
+    def rule(self, title: str = "") -> None:
+        if self.console is not None:
+            self.console.rule(title, style="bright_cyan")
+        else:
+            self.print(f"── {title} ──" if title else "─" * 48)
+
+    def prompt(self, label: str, default: str | None = None) -> str:
+        suffix = f" [{default}]" if default is not None else ""
+        try:
+            value = input(f"{label}{suffix}: ").strip()
+        except EOFError:
+            return ""
+        return value or (default or "")
+
+    def pause(self, message: str = "Press Enter to continue") -> None:
+        if not sys.stdin.isatty():
+            return
+        try:
+            input(f"\n{message}")
+        except EOFError:
+            return
 
     def table(self, title: str, columns: list[str], rows: list[list[Any]]) -> None:
         if self.console is not None:

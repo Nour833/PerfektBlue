@@ -18,6 +18,7 @@ from perfektblue.doctor import checks_to_dict, run_checks
 from perfektblue.engine import AssessmentEngine
 from perfektblue.errors import PerfektBlueError
 from perfektblue.fingerprint import fingerprint
+from perfektblue.menu import InteractiveMenu
 from perfektblue.models import Device, RiskLevel
 from perfektblue.modules import ModuleRegistry
 from perfektblue.output import Output
@@ -44,8 +45,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--json", action="store_true", help="Emit stable JSON output")
     parser.add_argument("--no-color", action="store_true")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command")
 
+    subparsers.add_parser("menu", help="Open the interactive terminal workspace")
     subparsers.add_parser("wizard", help="Run the guided Bluetooth assessment workflow")
     subparsers.add_parser("doctor", help="Check runtime capabilities")
     subparsers.add_parser("adapters", help="List Bluetooth adapters")
@@ -210,10 +212,27 @@ async def _run(args: argparse.Namespace) -> int:
     backend = _backend(config)
     profiles = ProfileRegistry()
     modules = ModuleRegistry()
-    needs_store = args.command in {"wizard", "assess", "sessions", "report", "migrate"}
+    needs_store = args.command in {
+        "menu",
+        "wizard",
+        "assess",
+        "sessions",
+        "report",
+        "migrate",
+    }
     store = SessionStore() if needs_store else None
     engine = AssessmentEngine(backend, config, profiles, modules, store)
 
+    if args.command == "menu":
+        assert store is not None
+        return await InteractiveMenu(
+            engine=engine,
+            output=output,
+            profiles=profiles,
+            modules=modules,
+            store=store,
+            config=config,
+        ).run()
     if args.command == "wizard":
         return await _wizard(engine, output)
     if args.command == "doctor":
@@ -520,6 +539,8 @@ async def _run(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.command is None:
+        args.command = "menu"
     try:
         return asyncio.run(_run(args))
     except PerfektBlueError as exc:

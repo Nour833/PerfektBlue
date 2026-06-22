@@ -2,7 +2,7 @@
 Type=Application
 Name=PerfektBlue
 Comment=Bluetooth security assessment framework
-Exec=perfektblue wizard
+Exec=perfektblue
 Icon=perfektblue
 Terminal=true
 Categories=System;Security;

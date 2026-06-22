@@ -44,13 +44,22 @@ perfektblue doctor
 Release tags publish a `.deb` on GitHub. Install it with:
 
 ```bash
-sudo apt install ./perfektblue_2.0.0-1_all.deb
+sudo apt install ./perfektblue_2.1.0-1_all.deb
 ```
 
 The application itself does not require global root execution. BlueZ permissions are reported
 by `perfektblue doctor`.
 
 ## Quick start
+
+Open the interactive Bluetooth intelligence console:
+
+```bash
+perfektblue
+```
+
+The menu keeps the selected target, assessment context, safety policy, and recent sessions
+visible while you navigate discovery, fingerprinting, planning, assessment, and reports.
 
 List adapters and discover nearby targets:
 
@@ -121,6 +130,7 @@ Sessions are stored under `~/.local/share/perfektblue/`; caches use
 ## Main commands
 
 ```text
+menu
 wizard
 doctor
 adapters
@@ -161,4 +171,3 @@ Bluetooth and automotive systems can be safety-critical. Use controlled benches,
 and isolated labs. See [ACCEPTABLE_USE.md](ACCEPTABLE_USE.md).
 
 PerfektBlue is licensed under the [MIT License](LICENSE).
-

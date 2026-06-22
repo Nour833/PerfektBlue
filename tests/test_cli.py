@@ -165,3 +165,74 @@ class CliTests(unittest.TestCase):
             ]
         )
         self.assertEqual(code, 2)
+
+    def test_default_command_opens_styled_main_menu(self) -> None:
+        with patch("builtins.input", side_effect=["q"]):
+            code, output, _ = self.run_cli(["--backend", "simulated", "--scenario", "vulnerable"])
+        self.assertEqual(code, 0)
+        self.assertIn("PERFEKTBLUE", output)
+        self.assertIn("Target discovery", output)
+        self.assertIn("Settings & safety", output)
+
+    def test_menu_discovery_selects_target_and_returns_home(self) -> None:
+        with patch("builtins.input", side_effect=["1", "1", "q"]):
+            code, output, _ = self.run_cli(
+                ["--backend", "simulated", "--scenario", "vulnerable", "menu"]
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("Discovered targets", output)
+        self.assertIn("PB Lab Head Unit", output)
+        self.assertIn("Target selected", output)
+
+    def test_menu_target_workspace_navigation(self) -> None:
+        choices = ["1", "1", "2", "1", "2", "3", "b", "q"]
+        with patch("builtins.input", side_effect=choices):
+            code, output, _ = self.run_cli(
+                ["--backend", "simulated", "--scenario", "vulnerable", "menu"]
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("Observed target evidence", output)
+        self.assertIn("Ranked profile matches", output)
+        self.assertIn("Module decisions", output)
+
+    def test_menu_assessment_and_session_navigation(self) -> None:
+        choices = ["1", "1", "3", "y", "5", "1", "b", "b", "q"]
+        with patch("builtins.input", side_effect=choices):
+            code, output, _ = self.run_cli(
+                ["--backend", "simulated", "--scenario", "patched", "menu"]
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("ASSESSMENT COMPLETE", output)
+        self.assertIn("Recent sessions", output)
+        self.assertIn("SESSION DETAIL", output)
+
+    def test_menu_secondary_sections_and_invalid_action(self) -> None:
+        choices = ["4", "6", "1", "2", "3", "b", "7", "8", "h", "invalid", "q"]
+        with patch("builtins.input", side_effect=choices):
+            code, output, _ = self.run_cli(
+                ["--backend", "simulated", "--scenario", "unknown", "menu"]
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("System readiness", output)
+        self.assertIn("Library status", output)
+        self.assertIn("Current runtime", output)
+        self.assertIn("Optional CAN plugin", output)
+        self.assertIn("Verdict language", output)
+        self.assertIn("Unknown action", output)
+
+    def test_menu_lab_active_authorization(self) -> None:
+        choices = ["1", "1", "3", "y", "AUTHORIZED", "q"]
+        with patch("builtins.input", side_effect=choices):
+            code, output, _ = self.run_cli(
+                [
+                    "--backend",
+                    "simulated",
+                    "--scenario",
+                    "vulnerable",
+                    "--risk",
+                    "lab-active",
+                    "menu",
+                ]
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("CONFIRMED-INJECTABLE", output)
