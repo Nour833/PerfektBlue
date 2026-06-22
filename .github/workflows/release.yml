@@ -23,7 +23,9 @@ jobs:
           cache: pip
       - name: Require annotated version tag
         run: |
-          test "$(git cat-file -t "$GITHUB_REF_NAME")" = "tag"
+          git fetch --force origin \
+            "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = "tag"
           python scripts/check_version.py --tag "$GITHUB_REF_NAME"
       - name: Install build and validation tools
         run: |
