@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "perfektblue-can"
+version = "2.0.0"
+description = "Optional CAN analysis plugin for PerfektBlue"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+  "perfektblue==2.0.0",
+  "python-can>=4.4",
+]
+
+[project.scripts]
+perfektblue-can = "perfektblue_can.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

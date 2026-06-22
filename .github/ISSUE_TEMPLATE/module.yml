@@ -1,0 +1,43 @@
+name: Target profile or module proposal
+description: Propose support for a documented Bluetooth target
+title: "[Module]: "
+labels: ["enhancement", "module"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not upload proprietary firmware, dangerous payloads, or identifying third-party data.
+  - type: input
+    id: target
+    attributes:
+      label: Product family
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware range
+    validations:
+      required: true
+  - type: textarea
+    id: signals
+    attributes:
+      label: Reliable fingerprint signals
+      description: UUIDs, manufacturer data, protocol behavior, firmware evidence, or references.
+    validations:
+      required: true
+  - type: textarea
+    id: transport
+    attributes:
+      label: Bluetooth transport and service
+      description: GATT, RFCOMM, L2CAP, AVCTP, or another documented transport.
+    validations:
+      required: true
+  - type: textarea
+    id: fixtures
+    attributes:
+      label: Available fixtures
+      description: Describe vulnerable, patched, and unsupported test fixtures.
+    validations:
+      required: true
+

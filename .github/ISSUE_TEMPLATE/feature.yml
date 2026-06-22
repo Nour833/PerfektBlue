@@ -1,0 +1,35 @@
+name: Feature request
+description: Propose a framework or workflow improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the research or defensive workflow this would improve.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and compatibility considerations
+      description: Explain relevant transports, profiles, target evidence, and failure modes.
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Expected risk level
+      options:
+        - Passive
+        - Active-safe
+        - Lab-active
+        - Not applicable
+    validations:
+      required: true
+

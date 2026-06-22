@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "id": "perfektblue.lab-head-unit.v1-patched",
+  "name": "PerfektBlue simulated lab head unit 1.1",
+  "vendor": "PerfektBlue",
+  "product_family": "Lab Head Unit",
+  "firmware_ranges": ["1.1.0"],
+  "rules": [
+    {
+      "field": "backend",
+      "operator": "equals",
+      "value": "simulated",
+      "weight": 25,
+      "required": true
+    },
+    {
+      "field": "name",
+      "operator": "equals",
+      "value": "PB Lab Head Unit",
+      "weight": 20,
+      "required": true
+    },
+    {
+      "field": "service_uuids",
+      "operator": "contains",
+      "value": "8d7f0001-4b1c-4f17-a6ec-54c0117a1100",
+      "weight": 25,
+      "required": true
+    },
+    {
+      "field": "manufacturer_data.65535",
+      "operator": "equals",
+      "value": "50424c414202",
+      "weight": 30,
+      "required": true
+    }
+  ],
+  "expected_services": ["8d7f0001-4b1c-4f17-a6ec-54c0117a1100"],
+  "compatible_modules": [
+    "bluetooth.service-exposure",
+    "bluetooth.security-posture",
+    "lab.simulated-canary"
+  ],
+  "injection_paths": ["lab.simulated-canary"],
+  "simulated": true,
+  "references": ["docs/module-authoring.md"]
+}
+

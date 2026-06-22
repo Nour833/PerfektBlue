@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+build/
+dist/
+htmlcov/
+*.deb
+*.whl
+*.tar.gz
+perfektblue-report-*.html
+perfektblue-report-*.json
+

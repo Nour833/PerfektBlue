@@ -1,0 +1,35 @@
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+    authors:
+      - dependabot
+  categories:
+    - title: "🚀 New capabilities"
+      labels:
+        - feature
+        - enhancement
+    - title: "🛡️ Security and safety"
+      labels:
+        - security
+        - safety
+    - title: "🐛 Fixes"
+      labels:
+        - bug
+        - fix
+    - title: "📦 Packaging and releases"
+      labels:
+        - packaging
+        - release
+        - dependencies
+    - title: "📚 Documentation"
+      labels:
+        - documentation
+    - title: "🧰 Internal improvements"
+      labels:
+        - maintenance
+        - refactor
+    - title: "📌 Other changes"
+      labels:
+        - "*"
+

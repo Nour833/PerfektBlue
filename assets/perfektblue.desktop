@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PerfektBlue
+Comment=Bluetooth security assessment framework
+Exec=perfektblue wizard
+Icon=perfektblue
+Terminal=true
+Categories=System;Security;
+Keywords=Bluetooth;BlueZ;Security;Automotive;

@@ -1,0 +1,58 @@
+.TH PERFEKTBLUE 1 "June 2026" "PerfektBlue 2.0.0" "User Commands"
+.SH NAME
+perfektblue \- Bluetooth-first adaptive security assessment framework
+.SH SYNOPSIS
+.B perfektblue
+[\fIGLOBAL OPTIONS\fR] \fICOMMAND\fR [\fIARGS\fR]
+.SH DESCRIPTION
+PerfektBlue discovers Bluetooth devices through BlueZ D-Bus, records evidence, matches target
+profiles, builds a compatible assessment plan, and produces evidence-backed reports.
+.PP
+The default risk policy is passive. Active verification requires a target-specific module,
+compatible profile, sufficient confidence, written authorization, and explicit command options.
+.SH COMMANDS
+.TP
+.B doctor
+Check Linux, Python dependencies, BlueZ access, and Bluetooth adapters.
+.TP
+.B adapters
+List Bluetooth adapters.
+.TP
+.B discover
+Discover Classic Bluetooth and BLE devices.
+.TP
+.B fingerprint TARGET
+Rank target profiles and explain their confidence.
+.TP
+.B plan TARGET
+Show selected and skipped assessment modules.
+.TP
+.B assess [TARGET]
+Run the generated assessment plan and store a session.
+.TP
+.B report SESSION
+Generate a JSON or standalone HTML report.
+.SH GLOBAL OPTIONS
+.TP
+.B \-\-backend bluez|simulated
+Select live BlueZ or the deterministic simulator.
+.TP
+.B \-\-risk passive|active-safe|lab-active
+Set the maximum permitted module risk.
+.TP
+.B \-\-json
+Emit machine-readable JSON.
+.SH FILES
+.TP
+.I ~/.config/perfektblue/config.toml
+User configuration.
+.TP
+.I ~/.local/share/perfektblue/
+Session database and artifacts.
+.SH SAFETY
+Use only on systems you own or are explicitly authorized to assess. A blocked, unsupported,
+inconclusive, or no-known-path result does not prove immunity to unknown vulnerabilities.
+.SH SEE ALSO
+.BR bluetoothctl (1),
+.BR btmon (1)
+

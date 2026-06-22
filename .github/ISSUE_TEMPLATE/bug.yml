@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a reproducible defect in PerfektBlue
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Remove target identifiers, credentials, proprietary firmware, and sensitive captures.
+        Security vulnerabilities should be reported through GitHub Security Advisories.
+  - type: input
+    id: version
+    attributes:
+      label: PerfektBlue version
+      placeholder: "2.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installation
+      options:
+        - Debian package
+        - Python wheel
+        - Editable source checkout
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, BlueZ version, and adapter model.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Include `perfektblue --json doctor` output if relevant.
+      render: shell
+

@@ -1,0 +1,6 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private security report
+    url: https://github.com/Nour833/PerfektBlue/security/advisories/new
+    about: Report vulnerabilities privately through GitHub Security Advisories.
+
